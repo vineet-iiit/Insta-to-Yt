@@ -70,6 +70,19 @@ def status():
     })
 
 
+@app.route("/api/debug")
+def debug():
+    """Shows config — use this to diagnose OAuth errors."""
+    return jsonify({
+        "APP_URL": APP_URL,
+        "redirect_uri": get_redirect_uri(),
+        "credentials_configured": credentials_configured(),
+        "client_id_prefix": os.getenv("GOOGLE_CLIENT_ID", "")[:30] + "...",
+        "is_local": is_local(),
+        "PORT": PORT,
+    })
+
+
 # ── OAuth: Web Flow ───────────────────────────────────────────────────────────
 
 @app.route("/oauth/start")
