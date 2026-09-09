@@ -1,0 +1,20 @@
+# ── Secrets (NEVER commit these) ─────────────────────────────
+.env
+tokens/
+credentials/
+
+# ── Python ────────────────────────────────────────────────────
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.egg-info/
+dist/
+build/
+
+# ── Temp downloads ────────────────────────────────────────────
+/tmp/
+
+# ── OS files ──────────────────────────────────────────────────
+.DS_Store
+Thumbs.db

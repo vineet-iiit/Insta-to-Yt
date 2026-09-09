@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>YouTube Auth — Insta Bot</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet" />
+  <style>
+    body {
+      margin: 0; font-family: 'Inter', sans-serif;
+      background: #0a0a0f; color: #f1f1f1;
+      display: flex; align-items: center; justify-content: center;
+      min-height: 100vh; padding: 24px;
+    }
+    .card {
+      background: #13131a; border: 1px solid #2a2a38;
+      border-radius: 20px; padding: 36px 28px; max-width: 420px;
+      width: 100%; text-align: center;
+    }
+    .icon { font-size: 52px; margin-bottom: 16px; }
+    h1 { font-size: 22px; font-weight: 700; margin-bottom: 8px; }
+    p  { font-size: 14px; color: #9ca3af; line-height: 1.6; margin-bottom: 20px; }
+    .success h1 { color: #22c55e; }
+    .error h1   { color: #f85149; }
+
+    .token-box {
+      background: #0d0d15; border: 1px solid #2a2a38; border-radius: 10px;
+      padding: 12px; font-family: monospace; font-size: 10px; color: #86efac;
+      text-align: left; word-break: break-all; max-height: 120px;
+      overflow-y: auto; margin-bottom: 12px;
+    }
+    .note {
+      background: #1c1c26; border: 1px solid #f59e0b; border-radius: 10px;
+      padding: 14px; font-size: 12px; color: #fde68a; line-height: 1.6;
+      text-align: left; margin-bottom: 20px;
+    }
+    .note strong { color: #f59e0b; }
+    .btn {
+      display: inline-block; background: #22c55e; color: #fff;
+      padding: 14px 28px; border-radius: 12px; text-decoration: none;
+      font-weight: 700; font-size: 15px; transition: opacity 0.2s;
+    }
+    .btn:active { opacity: 0.8; }
+    .btn-secondary {
+      background: transparent; border: 1px solid #2a2a38; color: #9ca3af;
+      margin-top: 10px; display: block;
+    }
+  </style>
+</head>
+<body>
+  {% if success %}
+  <div class="card success">
+    <div class="icon">🎉</div>
+    <h1>YouTube Connected!</h1>
+    <p>Your YouTube account is now linked. You can close this tab and go back to the app.</p>
+
+    {% if is_cloud and token_json %}
+    <div class="note">
+      <strong>⚠️ Important — Save your token for Railway:</strong><br><br>
+      Copy the token below and add it as a Railway environment variable named
+      <code>GOOGLE_TOKEN_JSON</code> so it persists across server restarts.
+    </div>
+    <div class="token-box" id="token-box">{{ token_json }}</div>
+    <button onclick="copyToken()" style="
+      width:100%; background:#3b82f6; color:#fff; border:none;
+      border-radius:10px; padding:12px; font-size:13px; font-weight:700;
+      cursor:pointer; font-family:inherit; margin-bottom:16px;
+    ">📋 Copy Token JSON</button>
+    {% endif %}
+
+    <a href="/" class="btn">← Back to App</a>
+  </div>
+  {% else %}
+  <div class="card error">
+    <div class="icon">❌</div>
+    <h1>Authentication Failed</h1>
+    <p>{{ message }}</p>
+    <a href="/oauth/start" class="btn">Try Again</a>
+    <a href="/" class="btn btn-secondary">← Back to App</a>
+  </div>
+  {% endif %}
+
+  <script>
+    function copyToken() {
+      const text = document.getElementById('token-box').textContent;
+      navigator.clipboard.writeText(text).then(() => {
+        event.target.textContent = '✅ Copied!';
+        setTimeout(() => event.target.textContent = '📋 Copy Token JSON', 2000);
+      });
+    }
+    // Auto-close this tab and signal the opener after success
+    {% if success %}
+    if (window.opener) {
+      window.opener.postMessage('youtube_auth_success', '*');
+      setTimeout(() => window.close(), 2000);
+    }
+    {% endif %}
+  </script>
+</body>
+</html>

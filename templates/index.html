@@ -1,0 +1,726 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
+  <title>Insta → YouTube Bot</title>
+
+  <!-- PWA -->
+  <link rel="manifest" href="/manifest.json" />
+  <meta name="theme-color" content="#0a0a0f" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="InstaYT" />
+  <link rel="apple-touch-icon" href="/static/apple-touch-icon.png" />
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <style>
+    /* ── Reset & Base ─────────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:           #0a0a0f;
+      --bg-card:      #13131a;
+      --bg-input:     #1c1c26;
+      --border:       #2a2a38;
+      --pink:         #e1306c;
+      --red:          #ff0000;
+      --green:        #22c55e;
+      --yellow:       #f59e0b;
+      --blue:         #3b82f6;
+      --text:         #f1f1f1;
+      --muted:        #6b7280;
+      --radius:       16px;
+      --radius-sm:    10px;
+    }
+
+    html, body {
+      min-height: 100%;
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Inter', sans-serif;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* ── Layout ───────────────────────────────────────────────── */
+    .app {
+      max-width: 480px;
+      margin: 0 auto;
+      padding: 24px 16px 48px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      min-height: 100vh;
+    }
+
+    /* ── Header ───────────────────────────────────────────────── */
+    .header {
+      text-align: center;
+      padding: 28px 0 8px;
+    }
+
+    .header-logo {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      margin-bottom: 6px;
+    }
+
+    .logo-insta {
+      font-size: 28px;
+      font-weight: 800;
+      background: linear-gradient(135deg, #f58529, #dd2a7b, #8134af);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .logo-arrow {
+      font-size: 20px;
+      color: var(--muted);
+    }
+
+    .logo-yt {
+      font-size: 28px;
+      font-weight: 800;
+      color: #ff0000;
+    }
+
+    .header-sub {
+      font-size: 13px;
+      color: var(--muted);
+      letter-spacing: 0.02em;
+    }
+
+    /* ── Card ─────────────────────────────────────────────────── */
+    .card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 20px;
+    }
+
+    .card-label {
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 12px;
+    }
+
+    /* ── Auth Card ────────────────────────────────────────────── */
+    .auth-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+
+    .auth-status {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 14px;
+      font-weight: 500;
+    }
+
+    .status-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: var(--muted);
+      flex-shrink: 0;
+      transition: background 0.3s;
+    }
+
+    .status-dot.connected { background: var(--green); box-shadow: 0 0 8px var(--green); }
+    .status-dot.warning   { background: var(--yellow); }
+    .status-dot.error     { background: #ef4444; }
+
+    .hint {
+      margin-top: 10px;
+      font-size: 12px;
+      color: var(--yellow);
+      line-height: 1.5;
+    }
+
+    /* ── Buttons ──────────────────────────────────────────────── */
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      padding: 10px 18px;
+      border-radius: var(--radius-sm);
+      font-size: 13px;
+      font-weight: 600;
+      font-family: inherit;
+      border: none;
+      cursor: pointer;
+      transition: opacity 0.2s, transform 0.1s;
+      white-space: nowrap;
+      letter-spacing: 0.01em;
+    }
+
+    .btn:active { transform: scale(0.97); }
+    .btn:disabled { opacity: 0.45; cursor: not-allowed; transform: none; }
+
+    .btn-red {
+      background: #ff0000;
+      color: #fff;
+    }
+
+    .btn-green {
+      background: var(--green);
+      color: #fff;
+    }
+
+    .btn-ghost {
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--muted);
+    }
+
+    .btn-full {
+      width: 100%;
+      padding: 16px;
+      font-size: 15px;
+      border-radius: var(--radius);
+    }
+
+    /* ── URL Input ────────────────────────────────────────────── */
+    .input-wrap {
+      position: relative;
+    }
+
+    .url-input {
+      width: 100%;
+      background: var(--bg-input);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 14px 16px;
+      font-size: 14px;
+      color: var(--text);
+      font-family: inherit;
+      outline: none;
+      transition: border-color 0.2s;
+      -webkit-appearance: none;
+    }
+
+    .url-input:focus { border-color: var(--pink); }
+    .url-input::placeholder { color: var(--muted); }
+
+    .paste-btn {
+      position: absolute;
+      right: 10px;
+      top: 50%;
+      transform: translateY(-50%);
+      background: var(--border);
+      border: none;
+      border-radius: 6px;
+      padding: 5px 10px;
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--muted);
+      cursor: pointer;
+      font-family: inherit;
+      transition: background 0.2s;
+    }
+
+    .paste-btn:active { background: var(--blue); color: #fff; }
+
+    /* ── Progress ─────────────────────────────────────────────── */
+    .progress-wrap {
+      display: none;
+    }
+
+    .progress-wrap.visible { display: block; }
+
+    .progress-bar-track {
+      width: 100%;
+      height: 4px;
+      background: var(--border);
+      border-radius: 99px;
+      overflow: hidden;
+      margin-bottom: 16px;
+    }
+
+    .progress-bar-fill {
+      height: 100%;
+      width: 0%;
+      background: linear-gradient(90deg, var(--pink), var(--red));
+      border-radius: 99px;
+      transition: width 0.4s ease;
+      animation: shimmer 1.5s infinite;
+    }
+
+    @keyframes shimmer {
+      0%   { filter: brightness(1); }
+      50%  { filter: brightness(1.3); }
+      100% { filter: brightness(1); }
+    }
+
+    .progress-bar-fill.indeterminate {
+      width: 40% !important;
+      animation: slide 1.4s ease-in-out infinite;
+    }
+
+    @keyframes slide {
+      0%   { transform: translateX(-100%); }
+      100% { transform: translateX(350%); }
+    }
+
+    /* ── Log ──────────────────────────────────────────────────── */
+    .log-box {
+      background: #0d0d15;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 14px;
+      max-height: 300px;
+      overflow-y: auto;
+      font-family: 'Courier New', monospace;
+      font-size: 12px;
+      line-height: 1.7;
+      scroll-behavior: smooth;
+    }
+
+    .log-line { display: block; }
+    .log-line.info    { color: #c9d1d9; }
+    .log-line.success { color: var(--green); font-weight: 600; }
+    .log-line.error   { color: #f85149; }
+    .log-line.muted   { color: var(--muted); }
+    .log-line.link    {
+      color: #58a6ff;
+      text-decoration: underline;
+      cursor: pointer;
+      word-break: break-all;
+    }
+
+    /* ── Success Banner ───────────────────────────────────────── */
+    .success-banner {
+      display: none;
+      background: linear-gradient(135deg, #052e16, #14532d);
+      border: 1px solid #22c55e55;
+      border-radius: var(--radius);
+      padding: 20px;
+      text-align: center;
+    }
+
+    .success-banner.visible { display: block; }
+
+    .success-banner .icon { font-size: 36px; margin-bottom: 8px; }
+    .success-banner h3 { font-size: 18px; font-weight: 700; color: var(--green); margin-bottom: 4px; }
+    .success-banner p { font-size: 13px; color: #86efac; margin-bottom: 16px; }
+
+    .yt-link-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: #ff0000;
+      color: #fff;
+      padding: 12px 24px;
+      border-radius: var(--radius-sm);
+      text-decoration: none;
+      font-weight: 700;
+      font-size: 14px;
+      transition: opacity 0.2s;
+    }
+
+    .yt-link-btn:active { opacity: 0.8; }
+
+    /* ── Footer ───────────────────────────────────────────────── */
+    .footer {
+      text-align: center;
+      font-size: 11px;
+      color: var(--muted);
+      padding-top: 8px;
+    }
+
+    /* ── Animations ───────────────────────────────────────────── */
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(8px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    .card { animation: fadeIn 0.4s ease both; }
+    .card:nth-child(2) { animation-delay: 0.05s; }
+    .card:nth-child(3) { animation-delay: 0.10s; }
+    .card:nth-child(4) { animation-delay: 0.15s; }
+  </style>
+</head>
+<body>
+  <div class="app">
+
+    <!-- Header -->
+    <div class="header">
+      <div class="header-logo">
+        <span class="logo-insta">Instagram</span>
+        <span class="logo-arrow">→</span>
+        <span class="logo-yt">YouTube</span>
+      </div>
+      <p class="header-sub">Paste a link · Auto-upload to your channel</p>
+    </div>
+
+    <!-- YouTube Auth Card -->
+    <div class="card" id="auth-card">
+      <div class="card-label">YouTube Account</div>
+      <div class="auth-row">
+        <div class="auth-status">
+          <div class="status-dot" id="auth-dot"></div>
+          <span id="auth-text">Checking…</span>
+        </div>
+        <button class="btn btn-red" id="auth-btn" onclick="connectYouTube()">Connect</button>
+      </div>
+      <div class="hint" id="auth-hint" style="display:none;"></div>
+    </div>
+
+    <!-- URL Input Card -->
+    <div class="card">
+      <div class="card-label">Instagram Video URL</div>
+      <div class="input-wrap" style="margin-bottom:14px;">
+        <input
+          class="url-input"
+          id="url-input"
+          type="url"
+          placeholder="https://www.instagram.com/reel/…"
+          inputmode="url"
+          autocomplete="off"
+          autocorrect="off"
+          spellcheck="false"
+        />
+        <button class="paste-btn" onclick="pasteFromClipboard()">Paste</button>
+      </div>
+      <button class="btn btn-green btn-full" id="upload-btn" onclick="startUpload()">
+        ⬆&nbsp; Upload to YouTube
+      </button>
+    </div>
+
+    <!-- Progress Card -->
+    <div class="card progress-wrap" id="progress-card">
+      <div class="card-label">Progress</div>
+      <div class="progress-bar-track">
+        <div class="progress-bar-fill indeterminate" id="progress-bar"></div>
+      </div>
+      <div class="log-box" id="log-box"></div>
+    </div>
+
+    <!-- Success Banner -->
+    <div class="success-banner" id="success-banner">
+      <div class="icon">🎉</div>
+      <h3>Uploaded Successfully!</h3>
+      <p>Your video is now live on YouTube</p>
+      <a href="#" id="yt-link" class="yt-link-btn" target="_blank" rel="noopener">
+        ▶&nbsp; Watch on YouTube
+      </a>
+    </div>
+
+    <div class="footer">Insta → YouTube Bot &nbsp;•&nbsp; v1.2</div>
+
+    <!-- Android/Chrome Install Banner -->
+    <div id="install-banner" style="
+      display:none; align-items:center; gap:12px;
+      background:#1c1c26; border:1px solid #3b82f6;
+      border-radius:14px; padding:14px 16px; margin-top:4px;
+    ">
+      <img src="/static/icon-192.png" width="40" height="40" style="border-radius:10px;" alt="icon" />
+      <div style="flex:1;">
+        <div style="font-size:13px;font-weight:700;color:#f1f1f1;">Install as App</div>
+        <div style="font-size:11px;color:#6b7280;">Add to home screen — no browser needed</div>
+      </div>
+      <button onclick="installApp()" style="
+        background:#3b82f6; color:#fff; border:none;
+        border-radius:8px; padding:8px 14px;
+        font-size:12px; font-weight:700; cursor:pointer; font-family:inherit;
+      ">Install</button>
+    </div>
+
+    <!-- iOS Install Tip -->
+    <div id="ios-install-tip" style="
+      display:none; background:#1c1c26; border:1px solid #f59e0b;
+      border-radius:14px; padding:14px 16px; margin-top:4px;
+      font-size:12px; color:#d1d5db; line-height:1.6;
+    ">
+      <div style="font-weight:700; color:#f59e0b; margin-bottom:4px;">📲 Install on iPhone</div>
+      Tap the <strong>Share</strong> button (□↑) at the bottom of Safari, then tap
+      <strong>"Add to Home Screen"</strong> to install this as an app.
+    </div>
+
+  </div>
+
+  <script>
+    // ── State ──────────────────────────────────────────────────────────────────
+    let isRunning = false;
+    let currentJobId = null;
+    let sseSource = null;
+
+    // ── Init ───────────────────────────────────────────────────────────────────
+    window.addEventListener('DOMContentLoaded', checkStatus);
+
+    async function checkStatus() {
+      try {
+        const res = await fetch('/api/status');
+        const data = await res.json();
+        updateAuthUI(data);
+      } catch (e) {
+        setAuthState('error', 'Cannot reach server', false);
+      }
+    }
+
+    function updateAuthUI(data) {
+      if (!data.credentials_configured) {
+        setAuthState('warning', 'Credentials not in .env', false);
+        document.getElementById('auth-hint').style.display = 'block';
+        document.getElementById('auth-hint').textContent =
+          'Edit .env on your PC and fill in GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET.';
+        document.getElementById('auth-btn').style.display = 'none';
+        return;
+      }
+      if (data.youtube_authenticated) {
+        setAuthState('connected', 'Connected to YouTube', true);
+        document.getElementById('auth-btn').textContent = 'Re-connect';
+        document.getElementById('auth-btn').className = 'btn btn-ghost';
+      } else {
+        setAuthState('idle', 'Not connected', false);
+        document.getElementById('auth-btn').textContent = 'Connect';
+        document.getElementById('auth-btn').className = 'btn btn-red';
+      }
+    }
+
+    function setAuthState(dotState, text, connected) {
+      const dot  = document.getElementById('auth-dot');
+      const label = document.getElementById('auth-text');
+      dot.className = 'status-dot ' + (connected ? 'connected' : dotState);
+      label.textContent = text;
+    }
+
+    // ── Auth ───────────────────────────────────────────────────────────────────
+    async function connectYouTube() {
+      const btn = document.getElementById('auth-btn');
+      btn.disabled = true;
+      btn.textContent = 'Opening…';
+
+      // Open OAuth in a popup window
+      const popup = window.open(
+        '/oauth/start',
+        'youtube_auth',
+        'width=500,height=700,scrollbars=yes'
+      );
+
+      btn.textContent = 'Waiting for auth…';
+
+      // Listen for message from OAuth result page
+      window.addEventListener('message', function handler(e) {
+        if (e.data === 'youtube_auth_success') {
+          window.removeEventListener('message', handler);
+          if (popup && !popup.closed) popup.close();
+          btn.disabled = false;
+          setTimeout(checkStatus, 500);
+        }
+      });
+
+      // Also poll in case postMessage doesn't fire (e.g. different origin)
+      const poll = setInterval(async () => {
+        if (popup && popup.closed) {
+          clearInterval(poll);
+          btn.disabled = false;
+          await checkStatus();
+        }
+      }, 1500);
+    }
+
+    // ── Paste ──────────────────────────────────────────────────────────────────
+    async function pasteFromClipboard() {
+      try {
+        const text = await navigator.clipboard.readText();
+        document.getElementById('url-input').value = text;
+      } catch (e) {
+        alert('Tap the URL box and paste manually (long-press → Paste)');
+      }
+    }
+
+    // ── Upload ─────────────────────────────────────────────────────────────────
+    async function startUpload() {
+      if (isRunning) return;
+
+      const url = document.getElementById('url-input').value.trim();
+      if (!url || !url.startsWith('http')) {
+        shakeInput();
+        return;
+      }
+
+      isRunning = true;
+      resetUI();
+      showProgress();
+
+      try {
+        const res = await fetch('/api/upload', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ url }),
+        });
+        const data = await res.json();
+
+        if (!data.success) {
+          logLine('❌ ' + data.error, 'error');
+          isRunning = false;
+          setUploadBtn(false);
+          return;
+        }
+
+        currentJobId = data.job_id;
+        streamProgress(currentJobId);
+
+      } catch (e) {
+        logLine('❌ Failed to reach server: ' + e.message, 'error');
+        isRunning = false;
+        setUploadBtn(false);
+      }
+    }
+
+    function streamProgress(jobId) {
+      if (sseSource) sseSource.close();
+      sseSource = new EventSource(`/api/progress/${jobId}`);
+
+      sseSource.onmessage = (e) => {
+        const msg = JSON.parse(e.data);
+
+        if (msg.type === 'ping' || msg.type === 'connected') return;
+
+        if (msg.type === 'done') {
+          sseSource.close();
+          isRunning = false;
+          setUploadBtn(false);
+          stopProgressBar();
+          return;
+        }
+
+        if (msg.type === 'link') {
+          showSuccess(msg.message);
+          return;
+        }
+
+        if (msg.type === 'error') {
+          logLine(msg.message, 'error');
+          stopProgressBar();
+          return;
+        }
+
+        logLine(msg.message, msg.type || 'info');
+      };
+
+      sseSource.onerror = () => {
+        sseSource.close();
+        isRunning = false;
+        setUploadBtn(false);
+        stopProgressBar();
+      };
+    }
+
+    // ── UI Helpers ─────────────────────────────────────────────────────────────
+    function resetUI() {
+      document.getElementById('log-box').innerHTML = '';
+      document.getElementById('success-banner').classList.remove('visible');
+      document.getElementById('progress-bar').classList.add('indeterminate');
+      setUploadBtn(true);
+    }
+
+    function showProgress() {
+      document.getElementById('progress-card').classList.add('visible');
+    }
+
+    function stopProgressBar() {
+      const bar = document.getElementById('progress-bar');
+      bar.classList.remove('indeterminate');
+      bar.style.width = '100%';
+    }
+
+    function setUploadBtn(loading) {
+      const btn = document.getElementById('upload-btn');
+      btn.disabled = loading;
+      btn.innerHTML = loading
+        ? '<span style="animation:spin 1s linear infinite;display:inline-block">⏳</span>&nbsp; Processing…'
+        : '⬆&nbsp; Upload to YouTube';
+    }
+
+    function logLine(msg, type = 'info') {
+      const box = document.getElementById('log-box');
+      const line = document.createElement('span');
+      line.className = 'log-line ' + type;
+      line.textContent = msg;
+      if (type === 'link') {
+        line.onclick = () => window.open(msg, '_blank');
+      }
+      box.appendChild(line);
+      box.scrollTop = box.scrollHeight;
+    }
+
+    function showSuccess(ytUrl) {
+      const banner = document.getElementById('success-banner');
+      const link = document.getElementById('yt-link');
+      link.href = ytUrl;
+      banner.classList.add('visible');
+      banner.scrollIntoView({ behavior: 'smooth' });
+    }
+
+    function shakeInput() {
+      const inp = document.getElementById('url-input');
+      inp.style.borderColor = '#ef4444';
+      inp.style.animation = 'none';
+      setTimeout(() => {
+        inp.style.borderColor = '';
+      }, 1000);
+    }
+
+    // ── Refresh status on focus (in case auth happened) ───────────────────────
+    window.addEventListener('focus', checkStatus);
+
+    // ── Spin keyframe (for loading btn) ───────────────────────────────────────
+    const style = document.createElement('style');
+    style.textContent = '@keyframes spin { to { transform: rotate(360deg); } }';
+    document.head.appendChild(style);
+
+    // ── PWA: Service Worker Registration ──────────────────────────────────────
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('/static/service-worker.js')
+          .catch((err) => console.warn('SW registration failed:', err));
+      });
+    }
+
+    // ── PWA: Install Prompt ───────────────────────────────────────────────────
+    let deferredPrompt = null;
+
+    window.addEventListener('beforeinstallprompt', (e) => {
+      e.preventDefault();
+      deferredPrompt = e;
+      showInstallBanner();
+    });
+
+    function showInstallBanner() {
+      const banner = document.getElementById('install-banner');
+      if (banner) banner.style.display = 'flex';
+    }
+
+    function installApp() {
+      if (!deferredPrompt) return;
+      deferredPrompt.prompt();
+      deferredPrompt.userChoice.then((result) => {
+        deferredPrompt = null;
+        const banner = document.getElementById('install-banner');
+        if (banner) banner.style.display = 'none';
+      });
+    }
+
+    // iOS: show manual install tip
+    const isIos = /iphone|ipad|ipod/i.test(navigator.userAgent);
+    const isInStandaloneMode = window.matchMedia('(display-mode: standalone)').matches;
+    if (isIos && !isInStandaloneMode) {
+      document.getElementById('ios-install-tip').style.display = 'block';
+    }
+  </script>
+</body>
+</html>
