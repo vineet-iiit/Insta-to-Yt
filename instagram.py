@@ -70,20 +70,9 @@ def download_instagram_video(
         "quiet": True,
         "no_warnings": True,
         "noplaylist": True,
-        # Ensure audio+video are merged into a single mp4
+        # merge_output_format handles audio+video merging automatically via ffmpeg
         "merge_output_format": "mp4",
         "prefer_ffmpeg": True,
-        # Postprocessors: merge then convert to mp4
-        "postprocessors": [
-            {
-                "key": "FFmpegMergerPP",
-                "preferredformat": "mp4",
-            },
-            {
-                "key": "FFmpegVideoConvertor",
-                "preferedformat": "mp4",
-            },
-        ],
         "progress_hooks": [_make_progress_hook(_log)],
     }
 
