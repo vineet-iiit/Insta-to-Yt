@@ -575,7 +575,42 @@
     let allAccounts = [];
 
     // ── Init ───────────────────────────────────────────────────────────────────
-    window.addEventListener('DOMContentLoaded', checkStatus);
+    window.addEventListener('DOMContentLoaded', () => {
+      checkStatus();
+      handleSharedUrl();
+    });
+
+    function handleSharedUrl() {
+      // Check if app was opened via Web Share Target (from Instagram share sheet)
+      const params = new URLSearchParams(window.location.search);
+      const sharedUrl = params.get('shared_url') || '';
+
+      if (sharedUrl && sharedUrl.startsWith('http')) {
+        const input = document.getElementById('url-input');
+        input.value = sharedUrl;
+        onUrlInput();
+
+        // Remove the query param from URL bar (clean look)
+        window.history.replaceState({}, '', '/');
+
+        // Show a brief toast that we got the URL
+        showSharedToast();
+      }
+    }
+
+    function showSharedToast() {
+      const toast = document.createElement('div');
+      toast.textContent = '🔗 Link received from Instagram!';
+      toast.style.cssText = `
+        position: fixed; top: 20px; left: 50%; transform: translateX(-50%);
+        background: #22c55e; color: #fff; padding: 10px 20px;
+        border-radius: 20px; font-size: 13px; font-weight: 600;
+        z-index: 9999; animation: fadeIn 0.3s ease;
+        box-shadow: 0 4px 20px rgba(34,197,94,0.4);
+      `;
+      document.body.appendChild(toast);
+      setTimeout(() => toast.remove(), 3000);
+    }
 
     async function checkStatus() {
       try {

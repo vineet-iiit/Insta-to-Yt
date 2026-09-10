@@ -52,6 +52,22 @@ def index():
     return render_template("index.html")
 
 
+@app.route("/share")
+def share_target():
+    """
+    Web Share Target handler — called when user shares a link from Instagram.
+    Redirects to home page with the URL as a query param so JS can pre-fill it.
+    """
+    # Instagram shares the URL in 'url' or sometimes embeds it in 'text'
+    url = (
+        request.args.get("url")
+        or request.args.get("text")
+        or request.args.get("title")
+        or ""
+    ).strip()
+    return redirect(f"/?shared_url={url}")
+
+
 # ── API: Status ───────────────────────────────────────────────────────────────
 
 @app.route("/api/status")
