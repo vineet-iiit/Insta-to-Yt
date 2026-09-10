@@ -87,17 +87,21 @@ def debug():
 
 @app.route("/oauth/start")
 def oauth_start():
-    """Redirect user to Google's OAuth consent screen."""
+    """Redirect user to Google's OAuth consent screen (with PKCE)."""
     if not credentials_configured():
-        return "❌ Google credentials not configured. Set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET.", 400
+        return "\u274c Google credentials not configured. Set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET.", 400
 
     try:
         redirect_uri = get_redirect_uri()
-        auth_url, state = yt.get_web_auth_url(redirect_uri)
+        # Generate PKCE pair
+        code_verifier, _ = yt.generate_pkce_pair()
+        session["oauth_state"] = None  # will be set after URL gen
+        session["code_verifier"] = code_verifier
+        auth_url, state = yt.get_web_auth_url(redirect_uri, code_verifier)
         session["oauth_state"] = state
         return redirect(auth_url)
     except Exception as exc:
-        return f"❌ OAuth error: {exc}", 500
+        return f"\u274c OAuth error: {exc}", 500
 
 
 @app.route("/oauth/callback")
@@ -125,7 +129,8 @@ def oauth_callback():
 
     try:
         redirect_uri = get_redirect_uri()
-        token_json = yt.exchange_web_code(code, state, redirect_uri)
+        code_verifier = session.get("code_verifier", "")
+        token_json = yt.exchange_web_code(code, state, redirect_uri, code_verifier)
         _token_json_for_display = token_json
         _youtube_service = yt.get_authenticated_service()
         return render_template("oauth_result.html", success=True,

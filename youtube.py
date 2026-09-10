@@ -8,6 +8,9 @@ Supports two auth modes:
 
 from pathlib import Path
 from typing import Callable, Optional
+import base64
+import hashlib
+import secrets
 
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
@@ -106,15 +109,32 @@ def _save_credentials(creds: Credentials) -> str:
     return token_json
 
 
+# ── PKCE helpers ─────────────────────────────────────────────────────────────
+
+def generate_pkce_pair() -> tuple[str, str]:
+    """Generate a PKCE code_verifier and code_challenge (S256 method)."""
+    code_verifier = secrets.token_urlsafe(64)
+    digest = hashlib.sha256(code_verifier.encode()).digest()
+    code_challenge = base64.urlsafe_b64encode(digest).rstrip(b'=').decode()
+    return code_verifier, code_challenge
+
+
 # ── Web OAuth Flow (for cloud/production) ─────────────────────────────────────
 
-def get_web_auth_url(redirect_uri: str) -> tuple[str, str]:
+def get_web_auth_url(redirect_uri: str, code_verifier: str) -> tuple[str, str]:
     """
-    Generate a Google OAuth URL for the web flow.
-    Returns (auth_url, state) — state must be stored in session.
+    Generate a Google OAuth URL for the web flow (with PKCE).
+    Returns (auth_url, state).
     """
     if not credentials_configured():
         raise YouTubeAuthError("Google credentials not configured in environment variables.")
+
+    _, code_challenge = generate_pkce_pair() if not code_verifier else (
+        None,
+        base64.urlsafe_b64encode(
+            hashlib.sha256(code_verifier.encode()).digest()
+        ).rstrip(b'=').decode()
+    )
 
     flow = Flow.from_client_config(
         _client_config(),
@@ -124,13 +144,15 @@ def get_web_auth_url(redirect_uri: str) -> tuple[str, str]:
     auth_url, state = flow.authorization_url(
         access_type="offline",
         prompt="consent",
+        code_challenge=code_challenge,
+        code_challenge_method="S256",
     )
     return auth_url, state
 
 
-def exchange_web_code(code: str, state: str, redirect_uri: str) -> str:
+def exchange_web_code(code: str, state: str, redirect_uri: str, code_verifier: str) -> str:
     """
-    Exchange an OAuth authorization code for credentials.
+    Exchange an OAuth authorization code for credentials (with PKCE).
     Saves the token to file and returns the token JSON string.
     """
     flow = Flow.from_client_config(
@@ -139,7 +161,7 @@ def exchange_web_code(code: str, state: str, redirect_uri: str) -> str:
         state=state,
         redirect_uri=redirect_uri,
     )
-    flow.fetch_token(code=code)
+    flow.fetch_token(code=code, code_verifier=code_verifier)
     creds = flow.credentials
     return _save_credentials(creds)
 
