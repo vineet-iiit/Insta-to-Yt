@@ -1,7 +1,7 @@
 """
 web_server.py — Flask web server for the Instagram → YouTube Bot.
 Supports local dev and cloud deployment (Railway).
-Uses proper web-based OAuth (redirect flow) so no local browser is needed.
+Multi-account YouTube support.
 """
 
 import json
@@ -32,10 +32,6 @@ app = Flask(__name__, template_folder="templates", static_folder="static")
 app.secret_key = SECRET_KEY
 CORS(app)
 
-# ── Global state ───────────────────────────────────────────────────────────────
-_youtube_service = None
-_token_json_for_display: str = ""   # shown to user after first cloud auth
-
 
 # ── Static / PWA routes ────────────────────────────────────────────────────────
 
@@ -61,18 +57,17 @@ def index():
 @app.route("/api/status")
 def status():
     creds_ok = credentials_configured()
-    authed = yt.is_authenticated() if creds_ok else False
+    accounts = yt.list_accounts() if creds_ok else []
     return jsonify({
         "credentials_configured": creds_ok,
-        "youtube_authenticated": authed,
+        "youtube_authenticated": len(accounts) > 0,
+        "accounts": accounts,
         "is_local": is_local(),
-        "token_json": _token_json_for_display if not is_local() else "",
     })
 
 
 @app.route("/api/debug")
 def debug():
-    """Shows config — use this to diagnose OAuth errors."""
     return jsonify({
         "APP_URL": APP_URL,
         "redirect_uri": get_redirect_uri(),
@@ -83,32 +78,48 @@ def debug():
     })
 
 
+# ── API: Accounts ─────────────────────────────────────────────────────────────
+
+@app.route("/api/accounts")
+def get_accounts():
+    accounts = yt.list_accounts()
+    return jsonify({"accounts": accounts})
+
+
+@app.route("/api/accounts/<account_id>/delete", methods=["POST"])
+def delete_account(account_id: str):
+    yt.delete_account(account_id)
+    return jsonify({"success": True})
+
+
+@app.route("/api/accounts/export")
+def export_accounts():
+    """Return accounts JSON for saving as ACCOUNTS_JSON env var."""
+    return jsonify({"accounts_json": yt.get_accounts_export_json()})
+
+
 # ── OAuth: Web Flow ───────────────────────────────────────────────────────────
 
 @app.route("/oauth/start")
 def oauth_start():
     """Redirect user to Google's OAuth consent screen (with PKCE)."""
     if not credentials_configured():
-        return "\u274c Google credentials not configured. Set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET.", 400
+        return "❌ Google credentials not configured.", 400
 
     try:
         redirect_uri = get_redirect_uri()
-        # Generate PKCE pair
         code_verifier, _ = yt.generate_pkce_pair()
-        session["oauth_state"] = None  # will be set after URL gen
         session["code_verifier"] = code_verifier
         auth_url, state = yt.get_web_auth_url(redirect_uri, code_verifier)
         session["oauth_state"] = state
         return redirect(auth_url)
     except Exception as exc:
-        return f"\u274c OAuth error: {exc}", 500
+        return f"❌ OAuth error: {exc}", 500
 
 
 @app.route("/oauth/callback")
 def oauth_callback():
     """Handle Google's redirect after user grants permission."""
-    global _youtube_service, _token_json_for_display
-
     code  = request.args.get("code")
     state = request.args.get("state")
     error = request.args.get("error")
@@ -121,7 +132,7 @@ def oauth_callback():
         return render_template("oauth_result.html", success=False,
                                message="No authorization code received from Google.")
 
-    # Verify state to prevent CSRF
+    # Verify state
     expected_state = session.get("oauth_state")
     if expected_state and state != expected_state:
         return render_template("oauth_result.html", success=False,
@@ -131,23 +142,30 @@ def oauth_callback():
         redirect_uri = get_redirect_uri()
         code_verifier = session.get("code_verifier", "")
         token_json = yt.exchange_web_code(code, state, redirect_uri, code_verifier)
-        _token_json_for_display = token_json
-        _youtube_service = yt.get_authenticated_service()
-        return render_template("oauth_result.html", success=True,
-                               token_json=token_json, is_cloud=not is_local())
+
+        # Save as new account
+        acc_id = yt.save_new_account(token_json)
+        accounts = yt.list_accounts()
+        new_acc = next((a for a in accounts if a["id"] == acc_id), {})
+        channel_name = new_acc.get("channel_name", "YouTube Account")
+
+        return render_template(
+            "oauth_result.html",
+            success=True,
+            channel_name=channel_name,
+            is_cloud=not is_local(),
+        )
     except Exception as exc:
-        return render_template("oauth_result.html", success=False,
-                               message=str(exc))
+        return render_template("oauth_result.html", success=False, message=str(exc))
 
 
 # ── API: Upload pipeline ───────────────────────────────────────────────────────
 
 @app.route("/api/upload", methods=["POST"])
 def upload():
-    global _youtube_service
-
     data = request.get_json(force=True)
-    url  = (data.get("url") or "").strip()
+    url        = (data.get("url") or "").strip()
+    account_id = (data.get("account_id") or "").strip()
 
     if not url or not url.startswith("http"):
         return jsonify({"success": False, "error": "Please provide a valid Instagram URL."}), 400
@@ -155,8 +173,13 @@ def upload():
     if not credentials_configured():
         return jsonify({"success": False, "error": "Google credentials not configured."}), 400
 
-    if not yt.is_authenticated():
-        return jsonify({"success": False, "error": "YouTube not connected. Please authenticate first."}), 401
+    accounts = yt.list_accounts()
+    if not accounts:
+        return jsonify({"success": False, "error": "No YouTube account connected. Please add one first."}), 401
+
+    # Validate account_id or pick first valid
+    if not account_id or not any(a["id"] == account_id for a in accounts):
+        account_id = accounts[0]["id"]
 
     job_id = str(int(time.time() * 1000))
     app.config[f"queue_{job_id}"] = queue.Queue()
@@ -168,15 +191,16 @@ def upload():
             q.put({"type": type_, "message": msg})
 
         try:
+            acc_name = next((a["channel_name"] for a in accounts if a["id"] == account_id), account_id)
+            log(f"📺 Uploading to: {acc_name}")
             log("🔍 Extracting Instagram video info…")
+
             video_path, caption = insta.download_instagram_video(
                 url, progress_callback=lambda m: log(m)
             )
 
-            if _youtube_service is None:
-                globals()["_youtube_service"] = yt.get_authenticated_service(log=log)
-
-            video_url = yt.upload_video(_youtube_service, video_path, caption, log=log)
+            service = yt.get_service_for_account(account_id, log=log)
+            video_url = yt.upload_video(service, video_path, caption, log=log)
 
             log("✅ Upload complete!", "success")
             log(video_url, "link")
