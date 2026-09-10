@@ -64,19 +64,26 @@ def download_instagram_video(
 
     # ── yt-dlp options ────────────────────────────────────────────────────────
     ydl_opts = {
-        "format": YT_DLP_FORMAT,
+        # Try mp4+m4a first, then any best video+audio, then single-file best
+        "format": "bestvideo[ext=mp4]+bestaudio[ext=m4a]/bestvideo+bestaudio/best",
         "outtmpl": output_template,
         "quiet": True,
         "no_warnings": True,
         "noplaylist": True,
-        # Merge video+audio into a single mp4 when needed
+        # Ensure audio+video are merged into a single mp4
+        "merge_output_format": "mp4",
+        "prefer_ffmpeg": True,
+        # Postprocessors: merge then convert to mp4
         "postprocessors": [
+            {
+                "key": "FFmpegMergerPP",
+                "preferredformat": "mp4",
+            },
             {
                 "key": "FFmpegVideoConvertor",
                 "preferedformat": "mp4",
-            }
+            },
         ],
-        # Progress hooks
         "progress_hooks": [_make_progress_hook(_log)],
     }
 
