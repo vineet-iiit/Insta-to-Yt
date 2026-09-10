@@ -123,7 +123,6 @@ def get_web_auth_url(redirect_uri: str) -> tuple[str, str]:
     )
     auth_url, state = flow.authorization_url(
         access_type="offline",
-        include_granted_scopes="true",
         prompt="consent",
     )
     return auth_url, state
