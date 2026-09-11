@@ -95,18 +95,84 @@ def _save_accounts(accounts: dict) -> None:
         json.dump(accounts, f, indent=2)
 
 
+def _fetch_channel_and_email(creds: "Credentials") -> tuple[str, str, str]:
+    """
+    Fetch (channel_name, gmail_email, yt_handle) for the given credentials.
+    Returns fallback strings on failure.
+    """
+    channel_name = "YouTube Account"
+    gmail_email  = ""
+    yt_handle    = ""
+
+    try:
+        # ── YouTube channel name + handle ──────────────────────────────
+        yt_svc = build("youtube", "v3", credentials=creds)
+        resp = yt_svc.channels().list(part="snippet", mine=True).execute()
+        items = resp.get("items", [])
+        print(f"[channel fetch] items={len(items)}")
+        if items:
+            snippet = items[0]["snippet"]
+            channel_name = snippet.get("title") or "YouTube Account"
+            yt_handle    = snippet.get("customUrl", "")  # e.g. @channelname
+            print(f"[channel fetch] name={channel_name!r}  handle={yt_handle!r}")
+        else:
+            print("[channel fetch] WARNING: no channel items returned")
+    except Exception as e:
+        print(f"[channel fetch] ERROR fetching channel: {e}")
+
+    try:
+        # ── Gmail address via oauth2 userinfo ──────────────────────────
+        user_svc = build("oauth2", "v2", credentials=creds)
+        info = user_svc.userinfo().get().execute()
+        gmail_email = info.get("email", "")
+        print(f"[channel fetch] gmail={gmail_email!r}")
+    except Exception as e:
+        print(f"[channel fetch] ERROR fetching email: {e}")
+
+    return channel_name, gmail_email, yt_handle
+
+
+def _fetch_and_update_channel_info(acc_id: str, accounts: dict) -> None:
+    """Try to fetch real channel name/Gmail/handle from Google APIs and persist."""
+    try:
+        creds = _creds_from_token_json(accounts[acc_id].get("token_json", ""))
+        if not creds or not (creds.valid or (creds.expired and creds.refresh_token)):
+            return
+        if creds.expired and creds.refresh_token:
+            creds = _refresh_and_save(acc_id, creds, accounts)
+        channel_name, gmail_email, yt_handle = _fetch_channel_and_email(creds)
+        accounts[acc_id]["channel_name"] = channel_name
+        accounts[acc_id]["email"]        = gmail_email
+        accounts[acc_id]["yt_handle"]    = yt_handle
+        _save_accounts(accounts)
+    except Exception:
+        pass
+
+
 def list_accounts() -> list[dict]:
     """Return list of all connected YouTube accounts (without token JSON)."""
     accounts = _load_accounts()
+    updated = False
+    for acc in accounts.values():
+        # Auto-fetch real channel info if still showing the generic placeholder
+        missing_name  = acc.get("channel_name", "YouTube Account") == "YouTube Account"
+        missing_email = not acc.get("email") and not acc.get("yt_handle")
+        if missing_name or missing_email:
+            _fetch_and_update_channel_info(acc["id"], accounts)
+            updated = True
+    if updated:
+        accounts = _load_accounts()  # reload after saves
+
     result = []
     for acc in accounts.values():
         creds = _creds_from_token_json(acc.get("token_json", ""))
         valid = bool(creds and (creds.valid or (creds.expired and creds.refresh_token)))
         result.append({
-            "id": acc["id"],
+            "id":           acc["id"],
             "channel_name": acc.get("channel_name", "YouTube Account"),
-            "email": acc.get("email", ""),
-            "valid": valid,
+            "email":        acc.get("email", ""),
+            "yt_handle":    acc.get("yt_handle", ""),
+            "valid":        valid,
         })
     return result
 
@@ -128,9 +194,9 @@ def _creds_from_token_json(token_json: str) -> Optional[Credentials]:
     if not token_json:
         return None
     try:
-        return Credentials.from_authorized_user_info(
-            json.loads(token_json), YOUTUBE_SCOPES
-        )
+        # Don't pass scopes — they are embedded in the token JSON already.
+        # Passing them can cause a mismatch if scope order differs.
+        return Credentials.from_authorized_user_info(json.loads(token_json))
     except Exception:
         return None
 
@@ -222,30 +288,32 @@ def exchange_web_code(
 
 def save_new_account(token_json: str, channel_name: str = "", email: str = "") -> str:
     """
-    Save a newly authenticated account. Fetches channel info automatically.
+    Save a newly authenticated account. Fetches channel name + Gmail automatically.
     Returns the new account_id.
     """
     acc_id = uuid.uuid4().hex[:8]
+    yt_handle = ""
 
-    # Fetch channel name from YouTube API if not provided
-    if not channel_name:
-        try:
-            creds = _creds_from_token_json(token_json)
-            svc = build("youtube", "v3", credentials=creds)
-            resp = svc.channels().list(part="snippet", mine=True).execute()
-            items = resp.get("items", [])
-            if items:
-                channel_name = items[0]["snippet"].get("title", "YouTube Account")
-                email = items[0]["snippet"].get("customUrl", "")
-        except Exception:
+    # Fetch channel name + Gmail from Google APIs
+    try:
+        creds = _creds_from_token_json(token_json)
+        fetched_name, fetched_email, fetched_handle = _fetch_channel_and_email(creds)
+        if not channel_name:
+            channel_name = fetched_name
+        if not email:
+            email = fetched_email
+        yt_handle = fetched_handle
+    except Exception:
+        if not channel_name:
             channel_name = "YouTube Account"
 
     accounts = _load_accounts()
     accounts[acc_id] = {
-        "id": acc_id,
+        "id":           acc_id,
         "channel_name": channel_name,
-        "email": email,
-        "token_json": token_json,
+        "email":        email,        # Gmail address
+        "yt_handle":    yt_handle,    # @handle from YouTube
+        "token_json":   token_json,
     }
     _save_accounts(accounts)
     return acc_id

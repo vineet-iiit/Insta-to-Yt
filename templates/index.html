@@ -394,6 +394,15 @@
       margin-top: 1px;
     }
     .account-badge.active-badge { color: var(--green); }
+    .account-handle {
+      font-size: 11px;
+      color: var(--muted);
+      margin-top: 2px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      opacity: 0.7;
+    }
 
     .account-delete {
       background: transparent;
@@ -656,21 +665,41 @@
         return;
       }
 
-      allAccounts.forEach(acc => {
+      allAccounts.forEach((acc, idx) => {
         const isActive = acc.id === activeAccountId;
         const item = document.createElement('div');
         item.className = 'account-item' + (isActive ? ' active' : '');
         item.onclick = () => selectAccount(acc.id);
+
+        // Channel name — fallback to numbered placeholder
+        const displayName = (acc.channel_name && acc.channel_name !== 'YouTube Account')
+          ? acc.channel_name
+          : `YouTube Account #${idx + 1}`;
+
+        // Gmail address (most reliable identifier)
+        const gmailLine = acc.email
+          ? `<div class="account-handle">📧 ${escHtml(acc.email)}</div>`
+          : '';
+
+        // YouTube @handle
+        const handleLine = acc.yt_handle
+          ? `<div class="account-handle">▶ ${escHtml(acc.yt_handle)}</div>`
+          : '';
+
         item.innerHTML = `
           <div class="account-avatar">▶</div>
           <div class="account-info">
-            <div class="account-name">${escHtml(acc.channel_name)}</div>
+            <div class="account-name">${escHtml(displayName)}</div>
+            ${gmailLine}
+            ${handleLine}
             <div class="account-badge ${isActive ? 'active-badge' : ''}">${isActive ? '✓ Selected for upload' : 'Tap to select'}</div>
           </div>
           <button class="account-delete" onclick="deleteAccount(event, '${acc.id}')" title="Remove">🗑</button>
         `;
         listEl.appendChild(item);
       });
+
+
     }
 
     function selectAccount(id) {

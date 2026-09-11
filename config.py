@@ -31,7 +31,12 @@ GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET", "")
 GOOGLE_TOKEN_JSON = os.getenv("GOOGLE_TOKEN_JSON", "")   # full token JSON string
 
 TOKEN_FILE     = TOKENS_DIR / "token.json"
-YOUTUBE_SCOPES = ["https://www.googleapis.com/auth/youtube.upload"]
+YOUTUBE_SCOPES = [
+    "https://www.googleapis.com/auth/youtube.upload",
+    "https://www.googleapis.com/auth/youtube.readonly",
+    "https://www.googleapis.com/auth/userinfo.email",
+    "openid",
+]
 
 # ── Server settings ───────────────────────────────────────────────────────────
 PORT       = int(os.getenv("PORT", 5000))
